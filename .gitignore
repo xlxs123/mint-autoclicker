@@ -1,0 +1,24 @@
+# Local build output, release staging, and previous versions
+/dist/
+/backups/
+/.validation/
+/.release/
+/.vs/
+bin/
+obj/
+*.exe
+*.pdb
+*.zip
+
+# User profiles and local settings
+settings*.xml
+settings*.json
+*.bak
+*.tmp
+.env
+.env.*
+*.user
+*.suo
+
+# Historical local test logs
+/tests/*results.txt
