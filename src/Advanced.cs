@@ -29,43 +29,47 @@ namespace MintClicker
 
         private void InitializeAdvanced()
         {
-            start.Width = 232;
-            stopButton.Left = 432;
-            stopButton.Width = 144;
-            pauseButton = ActionButton("暂停  F9", 266, 586, 156, Color.FromArgb(226, 233, 227), Ink);
+            start.Width = 290;
+            stopButton.Left = 540;
+            stopButton.Width = 180;
+            pauseButton = ActionButton("暂停  F9", 333, 733, 195, Color.FromArgb(226, 233, 227), Ink);
             pauseButton.Enabled = false;
             pauseButton.Click += delegate { PauseRun(); };
-            optionsButton = SmallButton(this, "更多设置", 610, 32, 124, delegate { ShowOptions(); });
-            runDetail = AddLabel(this, "就绪 · 启动后显示当前等待和重复进度", 24, 644, 552, 54, 10, Muted, false);
-            targetLabel = AddLabel(this, "目标保护：未启用", 24, 708, 552, 42, 9, Muted, false);
-            hint.SetBounds(24, 764, 552, 40);
-            hint.Text = "F6 开始/停止 · F7 取点 · F9 暂停/恢复\nF8 / F12 或主屏左上角紧急停止";
+            optionsButton = SmallButton(this, "更多设置", 763, 40, 155, delegate { ShowOptions(); });
+            // Left column under the action buttons, inside the 860 px client height:
+            // multi-line run status (3 lines at runtime), then the target-protection line.
+            runDetail = AddLabel(this, "就绪 · 启动后显示当前等待和重复进度", 30, 795, 690, 52, 10, Muted, false);
+            targetLabel = AddLabel(this, "目标保护：未启用", 30, 848, 690, 26, 9, Muted, false);
+            targetLabel.AutoEllipsis = true;
+            // The old 2-line hotkey footnote is gone: at this font size it no longer fits
+            // under the action buttons without pushing the window past the work area. Those
+            // keys are already printed on the buttons themselves ("开始连点 F6", "暂停 F9",
+            // "停止 F8") and listed in README.md.
+            hint.Visible = false;
 
-            editors = new TabControl { Bounds = new Rectangle(594, 144, 442, 652) };
+            // 640 + 37 px of tab chrome = 677, so the tab control bottom lands at 857 --
+            // inside the 860 client height. A taller control would make the form scroll.
+            editors = new TabControl { Bounds = new Rectangle(743, 180, 552, 677) };
             TabPage pointsPage = new TabPage("点击点"), macroPage = new TabPage("动作宏");
             pointsPage.BackColor = macroPage.BackColor = Color.White;
             Controls.Remove(positionsPanel);
             positionsPanel.Location = Point.Empty;
-            positionsPanel.Height = 616;
+            positionsPanel.Height = 640;
             pointsPage.Controls.Add(positionsPanel);
             editors.TabPages.Add(pointsPage);
             editors.TabPages.Add(macroPage);
             Controls.Add(editors);
-            AddLabel(positionsPanel, "每点动作次数", 18, 545, 180, 23, 9, Muted, false);
-            AddLabel(positionsPanel, "点内间隔（毫秒）", 216, 545, 188, 23, 9, Muted, false);
-            pointCount = Number(positionsPanel, "每点动作次数", 18, 574, 180, 1, 10000, 1);
-            pointRepeatInterval = Number(positionsPanel, "点内重复间隔", 216, 574, 188, 0, 3600000, 100);
-            pointCount.ValueChanged += delegate { UpdatePointDelays(); };
-            pointRepeatInterval.ValueChanged += delegate { UpdatePointDelays(); };
 
-            macroPanel = new Panel { Bounds = new Rectangle(0, 0, 426, 616), BackColor = Color.White };
+            // The macro tab is laid out as two columns: the step list with its type picker
+            // on the left, the edit actions and loop settings on the right.
+            macroPanel = new Panel { Bounds = new Rectangle(0, 0, 533, 640), BackColor = Color.White };
             macroPage.Controls.Add(macroPanel);
-            AddLabel(macroPanel, "动作顺序", 18, 15, 380, 30, 13, Ink, true);
-            AddLabel(macroPanel, "只执行勾选项 · 双击编辑 · F7 添加点击步骤", 18, 49, 390, 24, 9, Muted, false);
-            macroList = new ListView { Bounds = new Rectangle(18, 80, 386, 283), View = View.Details,
+            AddLabel(macroPanel, "动作顺序", 23, 19, 475, 38, 13, Ink, true);
+            AddLabel(macroPanel, "只执行勾选项 · 双击编辑 · F7 添加点击步骤", 23, 61, 488, 30, 9, Muted, false);
+            macroList = new ListView { Bounds = new Rectangle(23, 100, 230, 395), View = View.Details,
                 CheckBoxes = true, FullRowSelect = true, MultiSelect = false, HideSelection = false,
-                HeaderStyle = ColumnHeaderStyle.None, ShowItemToolTips = true, Font = new Font("Microsoft YaHei UI", 9) };
-            macroList.Columns.Add("步骤", 356);
+                HeaderStyle = ColumnHeaderStyle.None, ShowItemToolTips = true, Font = UiFont(9, FontStyle.Regular) };
+            macroList.Columns.Add("步骤", 200);
             macroPanel.Controls.Add(macroList);
             macroList.ItemChecked += delegate(object sender, ItemCheckedEventArgs args)
             {
@@ -73,27 +77,27 @@ namespace MintClicker
                 { macroEntries[args.Item.Index].Enabled = args.Item.Checked; UpdatePosition(); }
             };
             macroList.DoubleClick += delegate { EditMacro(); };
-            macroKind = Choice(macroPanel, "新增动作类型", 18, 377, new[] { "点击", "等待", "按键", "移动鼠标", "滚轮" });
-            macroKind.Width = 240;
-            SmallButton(macroPanel, "添加步骤", 270, 375, 134, delegate { AddMacro(); });
-            SmallButton(macroPanel, "编辑", 18, 421, 88, delegate { EditMacro(); });
-            SmallButton(macroPanel, "删除", 116, 421, 88, delegate
+            macroKind = Choice(macroPanel, "新增动作类型", 23, 513, new[] { "点击", "等待", "按键", "移动鼠标", "滚轮" });
+            macroKind.Width = 230;
+            SmallButton(macroPanel, "编辑", 270, 100, 116, delegate { EditMacro(); });
+            SmallButton(macroPanel, "删除", 393, 100, 116, delegate
             {
                 int index = SelectedMacro;
                 if (index < 0) return;
                 macroEntries.RemoveAt(index); RefreshMacro(Math.Min(index, macroEntries.Count - 1));
             });
-            SmallButton(macroPanel, "上移", 216, 421, 88, delegate { MoveMacro(-1); });
-            SmallButton(macroPanel, "下移", 314, 421, 90, delegate { MoveMacro(1); });
-            SmallButton(macroPanel, "从点击点追加转换", 18, 469, 236, delegate { ConvertPoints(); });
-            SmallButton(macroPanel, "使用此宏", 266, 469, 138, delegate { locationMode.SelectedIndex = 3; });
-            AddLabel(macroPanel, "局部循环：按列表编号；起点 0 表示关闭", 18, 516, 390, 22, 9, Muted, false);
-            AddLabel(macroPanel, "起点", 18, 542, 100, 22, 9, Muted, false);
-            AddLabel(macroPanel, "终点", 152, 542, 100, 22, 9, Muted, false);
-            AddLabel(macroPanel, "次数", 286, 542, 100, 22, 9, Muted, false);
-            loopStart = Number(macroPanel, "局部循环起点", 18, 570, 116, 0, 1000, 0);
-            loopEnd = Number(macroPanel, "局部循环终点", 152, 570, 116, 0, 1000, 0);
-            loopCount = Number(macroPanel, "局部循环次数", 286, 570, 118, 1, 10000, 1);
+            SmallButton(macroPanel, "上移", 270, 155, 116, delegate { MoveMacro(-1); });
+            SmallButton(macroPanel, "下移", 393, 155, 116, delegate { MoveMacro(1); });
+            SmallButton(macroPanel, "添加步骤", 270, 210, 239, delegate { AddMacro(); });
+            SmallButton(macroPanel, "使用此宏", 270, 265, 239, delegate { locationMode.SelectedIndex = 3; });
+            AddLabel(macroPanel, "局部循环", 270, 325, 256, 28, 9, Muted, false);
+            AddLabel(macroPanel, "起点", 270, 354, 77, 28, 9, Muted, false);
+            AddLabel(macroPanel, "终点", 358, 354, 77, 28, 9, Muted, false);
+            AddLabel(macroPanel, "次数", 446, 354, 77, 28, 9, Muted, false);
+            loopStart = Number(macroPanel, "局部循环起点", 270, 382, 80, 0, 1000, 0);
+            loopEnd = Number(macroPanel, "局部循环终点", 358, 382, 80, 0, 1000, 0);
+            loopCount = Number(macroPanel, "局部循环次数", 446, 382, 80, 1, 10000, 1);
+            AddLabel(macroPanel, "按列表编号，起点 0 为关闭", 270, 438, 256, 28, 9, Muted, false);
             editors.SelectedIndexChanged += delegate
             {
                 if (selectingTab || library == null) return;
@@ -106,7 +110,7 @@ namespace MintClicker
             trayStop = new ToolStripMenuItem("停止（F8）", null, delegate { StopRun("已通过托盘停止"); });
             menu.Items.AddRange(new ToolStripItem[] { trayStart, trayPause, trayStop, new ToolStripSeparator(),
                 new ToolStripMenuItem("显示主窗口", null, delegate { RestoreWindow(); }), new ToolStripMenuItem("退出", null, delegate { RequestExit(); }) });
-            tray = new NotifyIcon { Icon = Icon, Text = "轻点 v2.0.1 · 已就绪", ContextMenuStrip = menu, Visible = true };
+            tray = new NotifyIcon { Icon = Icon, Text = "轻点 v2.0.2 · 已就绪", ContextMenuStrip = menu, Visible = true };
             tray.DoubleClick += delegate { RestoreWindow(); };
             Resize += delegate
             {
@@ -305,7 +309,7 @@ namespace MintClicker
                 trayPause.Enabled = engine.Running && !modalOpen;
                 trayPause.Text = engine.Paused ? "恢复（F9）" : "暂停（F9）";
                 trayStop.Enabled = engine.Running || pending || capturing || targetCapturing;
-                tray.Text = "轻点 v2.0.1 · " + (engine.Running ? engine.Paused ? "已暂停" : "运行中 · 第 " + current + " 项" : "已停止");
+                tray.Text = "轻点 v2.0.2 · " + (engine.Running ? engine.Paused ? "已暂停" : "运行中 · 第 " + current + " 项" : "已停止");
             }
         }
         private void RestoreWindow() { WindowState = FormWindowState.Normal; Show(); Activate(); }
@@ -352,29 +356,29 @@ namespace MintClicker
 
         private static CheckBox OptionCheck(Control parent, string text, int y, bool value)
         {
-            CheckBox check = new CheckBox { Text = text, Checked = value, Bounds = new Rectangle(20, y, 440, 30) };
+            CheckBox check = new CheckBox { Text = text, Checked = value, Bounds = new Rectangle(25, y, 550, 38) };
             parent.Controls.Add(check); return check;
         }
         private void ShowOptions()
         {
-            using (Form dialog = new Form { Text = "更多设置", ClientSize = new Size(484, 440), Font = Font,
+            using (Form dialog = new Form { Text = "更多设置", ClientSize = new Size(660, 580), Font = UiFont(10, FontStyle.Regular),
                 AutoScaleMode = AutoScaleMode.Dpi, StartPosition = FormStartPosition.CenterParent,
                 FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, MinimizeBox = false, ShowInTaskbar = false })
             {
-                AddLabel(dialog, "启动倒计时", 20, 26, 170, 26, 10, Muted, false);
-                ComboBox delay = Choice(dialog, "启动倒计时", 200, 20, new[] { "立即开始", "1 秒", "3 秒", "5 秒", "10 秒" });
+                AddLabel(dialog, "启动倒计时", 25, 33, 213, 33, 10, Muted, false);
+                ComboBox delay = Choice(dialog, "启动倒计时", 250, 25, new[] { "立即开始", "1 秒", "3 秒", "5 秒", "10 秒" });
                 int[] values = { 0, 1, 3, 5, 10 }; delay.SelectedIndex = Array.IndexOf(values, advanced.StartupDelay);
-                CheckBox protect = OptionCheck(dialog, "仅在绑定的目标窗口处于前台时执行", 77, advanced.ProtectTarget);
-                AddLabel(dialog, advanced.TargetTitle.Length == 0 ? "尚未绑定目标窗口" : advanced.TargetTitle, 20, 115, 442, 36, 9, Muted, false);
-                Button bind = SmallButton(dialog, "3 秒后绑定目标窗口", 20, 158, 280, delegate { });
+                CheckBox protect = OptionCheck(dialog, "仅在绑定的目标窗口处于前台时执行", 96, advanced.ProtectTarget);
+                AddLabel(dialog, advanced.TargetTitle.Length == 0 ? "尚未绑定目标窗口" : advanced.TargetTitle, 25, 144, 610, 30, 9, Muted, false);
+                Button bind = SmallButton(dialog, "3 秒后绑定目标窗口", 25, 188, 350, delegate { });
                 bind.DialogResult = DialogResult.Retry;
-                CheckBox minimize = OptionCheck(dialog, "关闭或最小化时收进系统托盘", 210, advanced.TrayOnMinimize);
-                CheckBox startMin = OptionCheck(dialog, "下次启动时最小化（不会自动执行）", 247, advanced.StartMinimized);
+                CheckBox minimize = OptionCheck(dialog, "关闭或最小化时收进系统托盘", 253, advanced.TrayOnMinimize);
+                CheckBox startMin = OptionCheck(dialog, "下次启动时最小化（不会自动执行）", 299, advanced.StartMinimized);
                 bool originalStartup = ReadLoginStartup();
-                CheckBox login = OptionCheck(dialog, "登录 Windows 时启动（当前用户）", 284, originalStartup);
-                AddLabel(dialog, "F6 开始/停止 · F7 / Ctrl+Alt+A 取点\nF9 暂停/恢复 · F8 / F12 紧急停止", 20, 323, 444, 46, 9, Muted, false);
-                Button okay = SmallButton(dialog, "应用", 264, 389, 96, delegate { }); okay.DialogResult = DialogResult.OK;
-                Button cancel = SmallButton(dialog, "取消", 368, 389, 96, delegate { }); cancel.DialogResult = DialogResult.Cancel;
+                CheckBox login = OptionCheck(dialog, "登录 Windows 时启动（当前用户）", 345, originalStartup);
+                AddLabel(dialog, "F6 开始/停止 · F7 / Ctrl+Alt+A 取点\nF9 暂停/恢复 · F8 / F12 紧急停止", 25, 404, 610, 56, 9, Muted, false);
+                Button okay = SmallButton(dialog, "应用", 385, 497, 120, delegate { }); okay.DialogResult = DialogResult.OK;
+                Button cancel = SmallButton(dialog, "取消", 515, 497, 120, delegate { }); cancel.DialogResult = DialogResult.Cancel;
                 dialog.AcceptButton = okay; dialog.CancelButton = cancel;
                 DialogResult result = ShowModal(delegate { return dialog.ShowDialog(this); });
                 if (result != DialogResult.OK && result != DialogResult.Retry) return;

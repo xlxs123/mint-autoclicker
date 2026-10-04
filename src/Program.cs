@@ -9,7 +9,7 @@ using System.Xml.Serialization;
 
 [assembly: System.Reflection.AssemblyTitle("轻点 · 连点器")]
 [assembly: System.Reflection.AssemblyProduct("轻点连点器")]
-[assembly: System.Reflection.AssemblyVersion("2.0.1.0")]
+[assembly: System.Reflection.AssemblyVersion("2.0.2.0")]
 
 namespace MintClicker
 {
@@ -62,6 +62,18 @@ namespace MintClicker
         private static readonly Color Ink = Color.FromArgb(28, 42, 39);
         private static readonly Color Muted = Color.FromArgb(101, 117, 110);
         private static readonly Color Green = Color.FromArgb(28, 112, 83);
+
+        // Windows renders these 9-12 pt fonts at 120 DPI (125% display scale), 25% larger
+        // than the original 96 DPI design assumed. The window is therefore laid out at
+        // 1.25x: every Bounds value below is the 96 DPI design value times Scale, and
+        // every font size goes through UiFont so text and its box stay in proportion.
+        private const float UiScale = 1.25F;
+        private const string UiFontName = "Microsoft YaHei UI";
+
+        private static Font UiFont(float designPoints, FontStyle style)
+        {
+            return new Font(UiFontName, designPoints * UiScale, style);
+        }
         private readonly ClickEngine engine = new ClickEngine();
         private readonly System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
         private readonly NumericUpDown interval, limit, pointX, pointY, delayBefore, delayAfter;
@@ -96,92 +108,104 @@ namespace MintClicker
             configPath = settingsPath;
             profilesPath = Path.ChangeExtension(settingsPath, ".profiles.v2.json");
             useHotkeys = registerHotkeys;
-            Text = "轻点 · 自动点击与宏 v2.0.1";
+            Text = "轻点 · 自动点击与宏 v2.0.2";
             AutoScaleDimensions = new SizeF(96, 96);
             AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(1060, 808);
+            // 860 content + ~29 px of window chrome = 889, which fits the 912 px work area.
+            // Never raise this without re-checking: exceeding the work area makes WinForms
+            // clamp the window and add a scrollbar, which hides the bottom of the form.
+            ClientSize = new Size(1325, 880);
             AutoScroll = true;
             AutoScrollMinSize = ClientSize;
             BackColor = Color.FromArgb(244, 247, 244);
             ForeColor = Ink;
-            Font = new Font("Microsoft YaHei UI", 10F);
+            Font = UiFont(10F, FontStyle.Regular);
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.FixedSingle;
             MaximizeBox = false;
             DoubleBuffered = true;
             using (Icon icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath)) Icon = (Icon)icon.Clone();
 
-            AddLabel(this, "轻点", 28, 23, 160, 38, 24, Ink, true);
-            AddLabel(this, "让重复点击，简单一点。", 30, 66, 360, 23, 10, Muted, false);
-            pin = new CheckBox { Text = "窗口置顶", Bounds = new Rectangle(464, 37, 110, 30), AutoSize = false };
+            AddLabel(this, "轻点", 35, 29, 200, 48, 24, Ink, true);
+            AddLabel(this, "让重复点击，简单一点。", 38, 83, 450, 29, 10, Muted, false);
+            pin = new CheckBox { Text = "窗口置顶", Bounds = new Rectangle(580, 46, 138, 38), AutoSize = false };
             pin.CheckedChanged += delegate { TopMost = pin.Checked; };
             Controls.Add(pin);
-            showMarkers = new CheckBox { Text = "显示屏幕标记", Checked = true, Bounds = new Rectangle(860, 37, 156, 30) };
+            showMarkers = new CheckBox { Text = "显示屏幕标记", Checked = true, Bounds = new Rectangle(1075, 46, 195, 38) };
             showMarkers.CheckedChanged += delegate { SyncMarkers(); };
             Controls.Add(showMarkers);
-            dragMarkers = new CheckBox { Text = "停止时允许拖动", Checked = true, Bounds = new Rectangle(860, 68, 176, 24), Font = new Font("Microsoft YaHei UI", 9) };
+            dragMarkers = new CheckBox { Text = "停止时允许拖动", Checked = true, Bounds = new Rectangle(1075, 85, 220, 30), Font = UiFont(9, FontStyle.Regular) };
             dragMarkers.CheckedChanged += delegate { SetPointEditing(dragMarkers.Checked); };
             Controls.Add(dragMarkers);
 
-            profilePanel = Card(24, 94, 992, 38, Color.White);
-            AddLabel(profilePanel, "方案", 8, 7, 42, 25, 10, Muted, false);
-            profileChoice = Choice(profilePanel, "当前方案", 54, 3, new[] { "默认方案" });
-            profileChoice.Width = 244;
+            profilePanel = Card(30, 118, 1240, 48, Color.White);
+            AddLabel(profilePanel, "方案", 14, 8, 66, 32, 10, Muted, false);
+            profileChoice = Choice(profilePanel, "当前方案", 84, 6, new[] { "默认方案" });
+            profileChoice.Width = 297;
             profileChoice.SelectedIndexChanged += delegate { SwitchProfile(); };
-            SmallButton(profilePanel, "保存", 310, 2, 78, delegate { if (SaveCurrentProfile()) status.Text = "●  方案已保存"; });
-            SmallButton(profilePanel, "新建", 394, 2, 78, delegate { CreateProfile(false); });
-            SmallButton(profilePanel, "复制", 478, 2, 78, delegate { CreateProfile(true); });
-            SmallButton(profilePanel, "重命名", 562, 2, 88, delegate { RenameProfile(); });
-            SmallButton(profilePanel, "删除", 656, 2, 78, delegate { DeleteProfile(); });
-            SmallButton(profilePanel, "导入", 740, 2, 78, delegate { ImportProfile(); });
-            SmallButton(profilePanel, "导出", 824, 2, 78, delegate { ExportProfile(); });
+            SmallButton(profilePanel, "保存", 390, 6, 98, delegate { if (SaveCurrentProfile()) status.Text = "●  方案已保存"; });
+            SmallButton(profilePanel, "新建", 495, 6, 98, delegate { CreateProfile(false); });
+            SmallButton(profilePanel, "复制", 600, 6, 98, delegate { CreateProfile(true); });
+            SmallButton(profilePanel, "重命名", 705, 6, 110, delegate { RenameProfile(); });
+            SmallButton(profilePanel, "删除", 822, 6, 98, delegate { DeleteProfile(); });
+            SmallButton(profilePanel, "导入", 927, 6, 98, delegate { ImportProfile(); });
+            SmallButton(profilePanel, "导出", 1032, 6, 98, delegate { ExportProfile(); });
 
-            Panel dashboard = Card(24, 144, 552, 116, Color.FromArgb(227, 239, 231));
-            status = AddLabel(dashboard, "●  已就绪", 18, 13, 510, 30, 13, Green, true);
-            AddLabel(dashboard, "已执行轮数", 20, 53, 150, 20, 9, Muted, false);
-            count = AddLabel(dashboard, "0", 20, 75, 235, 34, 20, Ink, true);
-            AddLabel(dashboard, "运行时间", 303, 53, 180, 20, 9, Muted, false);
-            elapsed = AddLabel(dashboard, "00:00:00", 303, 77, 226, 30, 17, Ink, false);
+            Panel dashboard = Card(30, 180, 690, 145, Color.FromArgb(227, 239, 231));
+            status = AddLabel(dashboard, "●  已就绪", 23, 16, 638, 38, 13, Green, true);
+            AddLabel(dashboard, "已执行轮数", 25, 66, 188, 25, 9, Muted, false);
+            count = AddLabel(dashboard, "0", 25, 94, 294, 43, 20, Ink, true);
+            AddLabel(dashboard, "运行时间", 379, 66, 225, 25, 9, Muted, false);
+            elapsed = AddLabel(dashboard, "00:00:00", 379, 96, 283, 38, 17, Ink, false);
 
-            settings = Card(24, 276, 552, 254, Color.White);
-            AddLabel(settings, "点击设置", 18, 13, 200, 27, 12, Ink, true);
-            AddLabel(settings, "全局间隔（毫秒）", 20, 51, 220, 22, 10, Muted, false);
-            interval = Number(settings, "点击间隔（毫秒）", 20, 78, 238, 10, 3600000, 100);
-            rate = AddLabel(settings, "全局约 10.0 次 / 秒", 294, 83, 235, 24, 10, Muted, false);
+            settings = Card(30, 345, 690, 305, Color.White);
+            AddLabel(settings, "点击设置", 23, 16, 250, 34, 12, Ink, true);
+            AddLabel(settings, "全局间隔（毫秒）", 25, 64, 275, 28, 10, Muted, false);
+            interval = Number(settings, "点击间隔（毫秒）", 25, 98, 298, 10, 3600000, 100);
+            rate = AddLabel(settings, "全局约 10.0 次 / 秒", 368, 104, 294, 30, 10, Muted, false);
             interval.ValueChanged += delegate { rate.Text = interval.Value < 1000 ? "全局约 " + (1000m / interval.Value).ToString("0.0") + " 次 / 秒" : "全局每 " + (interval.Value / 1000m).ToString("0.##") + " 秒一次"; };
-            AddLabel(settings, "鼠标按键", 20, 125, 238, 23, 10, Muted, false);
-            AddLabel(settings, "点击方式", 294, 125, 238, 23, 10, Muted, false);
-            button = Choice(settings, "鼠标按键", 20, 153, new[] { "左键", "右键", "中键" });
+            AddLabel(settings, "鼠标按键", 25, 156, 298, 29, 10, Muted, false);
+            AddLabel(settings, "点击方式", 368, 156, 298, 29, 10, Muted, false);
+            button = Choice(settings, "鼠标按键", 25, 191, new[] { "左键", "右键", "中键" });
             button.SelectedIndexChanged += delegate { SyncMarkers(); };
-            mode = Choice(settings, "点击方式", 294, 153, new[] { "单击", "双击（每点 2 次）" });
-            AddLabel(settings, "重复次数", 20, 205, 110, 26, 10, Muted, false);
-            limit = Number(settings, "重复次数，0 为不限", 130, 202, 128, 0, 1000000000, 0);
-            AddLabel(settings, "0 = 不限；多点时遍历一遍为一轮", 277, 207, 266, 28, 9, Muted, false);
+            mode = Choice(settings, "点击方式", 368, 191, new[] { "单击", "双击（每点 2 次）" });
+            AddLabel(settings, "重复次数", 25, 256, 138, 33, 10, Muted, false);
+            limit = Number(settings, "重复次数，0 为不限", 163, 253, 160, 0, 1000000000, 0);
+            AddLabel(settings, "0 = 不限；多点时遍历一遍为一轮", 346, 259, 333, 35, 9, Muted, false);
 
-            locationMode = Choice(this, "点击位置模式", 24, 541, new[] { "跟随鼠标", "固定单点", "多点循环", "动作宏" });
-            locationMode.Width = 142;
-            position = AddLabel(this, "跟随鼠标 · F7 记录单点", 180, 543, 396, 28, 10, Muted, false);
+            locationMode = Choice(this, "点击位置模式", 30, 676, new[] { "跟随鼠标", "固定单点", "多点循环", "动作宏" });
+            locationMode.Width = 178;
+            position = AddLabel(this, "跟随鼠标 · F7 记录单点", 225, 679, 495, 35, 10, Muted, false);
             locationMode.SelectedIndexChanged += delegate { UpdatePosition(); SelectEditorTab(); };
 
-            positionsPanel = Card(594, 144, 422, 554, Color.White);
-            AddLabel(positionsPanel, "循环位置", 18, 15, 270, 30, 13, Ink, true);
-            AddLabel(positionsPanel, "F7 添加 · 左键蓝 / 右键绿 / 中键红 · 仅点击勾选项", 18, 48, 390, 24, 9, Muted, false);
-            positionsList = new ListView { AccessibleName = "循环点击位置列表", Bounds = new Rectangle(18, 75, 386, 152), CheckBoxes = true, View = View.Details, HeaderStyle = ColumnHeaderStyle.None, FullRowSelect = true, MultiSelect = false, HideSelection = false, BorderStyle = BorderStyle.FixedSingle, ShowItemToolTips = true, Font = new Font("Microsoft YaHei UI", 9) };
-            positionsList.Columns.Add("位置", 260);
-            positionsList.SizeChanged += delegate { positionsList.Columns[0].Width = Math.Max(80, positionsList.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 2); };
+            positionsPanel = Card(743, 180, 527, 663, Color.White);
+            AddLabel(positionsPanel, "循环位置", 23, 19, 338, 38, 13, Ink, true);
+            AddLabel(positionsPanel, "F7 添加 · 左键蓝 / 右键绿 / 中键红 · 仅点击勾选项", 23, 60, 488, 30, 9, Muted, false);
+            // Left column: the point list, then the per-point repeat settings beneath it.
+            positionsList = new ListView { AccessibleName = "循环点击位置列表", Bounds = new Rectangle(23, 94, 254, 100), CheckBoxes = true, View = View.Details, HeaderStyle = ColumnHeaderStyle.None, FullRowSelect = true, MultiSelect = false, HideSelection = false, BorderStyle = BorderStyle.FixedSingle, ShowItemToolTips = true, Font = UiFont(9, FontStyle.Regular) };
+            positionsList.Columns.Add("位置", 160);
+            positionsList.SizeChanged += delegate { positionsList.Columns[0].Width = Math.Max(100, positionsList.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 3); };
             positionsPanel.Controls.Add(positionsList);
             positionsList.ItemChecked += delegate(object sender, ItemCheckedEventArgs e)
             {
                 if (!updatingPositions && e.Item.Index >= 0) { positions[e.Item.Index].Enabled = e.Item.Checked; UpdatePosition(); }
             };
             positionsList.SelectedIndexChanged += delegate { UpdatePointButton(); };
-            AddLabel(positionsPanel, "X", 18, 238, 25, 26, 10, Muted, false);
-            pointX = Number(positionsPanel, "选中点 X 坐标", 42, 232, 154, -1000000, 1000000, 0);
-            AddLabel(positionsPanel, "Y", 216, 238, 25, 26, 10, Muted, false);
-            pointY = Number(positionsPanel, "选中点 Y 坐标", 240, 232, 164, -1000000, 1000000, 0);
-            AddLabel(positionsPanel, "选中点按键", 18, 278, 104, 26, 9, Muted, false);
-            pointButton = Choice(positionsPanel, "选中点击点的鼠标按键", 130, 273, new[] { "左键 · 蓝色", "右键 · 绿色", "中键 · 红色" });
-            pointButton.Width = 274;
+            AddLabel(positionsPanel, "每点动作次数", 23, 202, 254, 29, 9, Muted, false);
+            pointCount = Number(positionsPanel, "每点动作次数", 23, 228, 254, 1, 10000, 1);
+            AddLabel(positionsPanel, "点内间隔（毫秒）", 23, 281, 254, 29, 9, Muted, false);
+            pointRepeatInterval = Number(positionsPanel, "点内重复间隔", 23, 307, 254, 0, 3600000, 100);
+            inheritInterval = new CheckBox { Text = "后延时沿用全局间隔", Checked = true, Bounds = new Rectangle(23, 363, 254, 30), Font = UiFont(9, FontStyle.Regular) };
+            positionsPanel.Controls.Add(inheritInterval);
+            
+            // Right column: the selected point's coordinates, button and delays.
+            AddLabel(positionsPanel, "X", 306, 100, 34, 33, 10, Muted, false);
+            pointX = Number(positionsPanel, "选中点 X 坐标", 340, 94, 187, -1000000, 1000000, 0);
+            AddLabel(positionsPanel, "Y", 306, 145, 34, 33, 10, Muted, false);
+            pointY = Number(positionsPanel, "选中点 Y 坐标", 340, 139, 187, -1000000, 1000000, 0);
+            AddLabel(positionsPanel, "选中点按键", 306, 188, 221, 30, 9, Muted, false);
+            pointButton = Choice(positionsPanel, "选中点击点的鼠标按键", 306, 214, new[] { "左键 · 蓝色", "右键 · 绿色", "中键 · 红色" });
+            pointButton.Width = 221;
             pointButton.Enabled = false;
             pointButton.SelectedIndexChanged += delegate
             {
@@ -190,40 +214,40 @@ namespace MintClicker
                 positions[index].Button = pointButton.SelectedIndex;
                 RefreshPositions(index);
             };
-            AddLabel(positionsPanel, "点击前等待（毫秒）", 18, 315, 185, 24, 9, Muted, false);
-            AddLabel(positionsPanel, "点击后等待（毫秒）", 216, 315, 188, 24, 9, Muted, false);
-            delayBefore = Number(positionsPanel, "选中点点击前延时", 18, 340, 180, 0, 3600000, 0);
-            delayAfter = Number(positionsPanel, "选中点点击后延时", 216, 340, 188, 0, 3600000, 100);
-            AddLabel(positionsPanel, "延时与按键修改立即生效", 18, 379, 190, 24, 9, Muted, false);
-            inheritInterval = new CheckBox { Text = "后延时沿用全局间隔", Checked = true, Bounds = new Rectangle(216, 376, 195, 27), Font = new Font("Microsoft YaHei UI", 9) };
-            positionsPanel.Controls.Add(inheritInterval);
+            AddLabel(positionsPanel, "点击前等待（毫秒）", 306, 254, 221, 30, 9, Muted, false);
+            delayBefore = Number(positionsPanel, "选中点点击前延时", 306, 278, 221, 0, 3600000, 0);
+            AddLabel(positionsPanel, "点击后等待（毫秒）", 306, 322, 221, 30, 9, Muted, false);
+            delayAfter = Number(positionsPanel, "选中点点击后延时", 306, 346, 221, 0, 3600000, 100);
+            applyCoordinates = SmallButton(positionsPanel, "应用坐标", 306, 411, 221, delegate { ApplyCoordinates(); });
+            editPoints = SmallButton(positionsPanel, "锁定标记（穿透）", 306, 453, 221, delegate { TogglePointEditing(); });
             delayBefore.ValueChanged += delegate { UpdatePointDelays(); };
             delayAfter.ValueChanged += delegate { UpdatePointDelays(); };
             inheritInterval.CheckedChanged += delegate { UpdatePointDelays(); };
             interval.ValueChanged += delegate { if (inheritInterval.Checked) UpdatePointButton(); };
-            applyCoordinates = SmallButton(positionsPanel, "应用坐标", 18, 409, 180, delegate { ApplyCoordinates(); });
-            editPoints = SmallButton(positionsPanel, "锁定标记（穿透）", 216, 409, 188, delegate { TogglePointEditing(); });
-            RouteButton("添加位置（3 秒后取点）", 18, 453, 386, delegate { BeginCapture(); });
-            RouteButton("上移", 18, 498, 84, delegate { MovePosition(-1); });
-            RouteButton("下移", 110, 498, 84, delegate { MovePosition(1); });
-            RouteButton("删除", 202, 498, 94, delegate
+            pointCount.ValueChanged += delegate { UpdatePointDelays(); };
+            pointRepeatInterval.ValueChanged += delegate { UpdatePointDelays(); };
+            // Bottom action row, full width under both columns.
+            RouteButton("添加位置（3 秒后取点）", 23, 498, 482, delegate { BeginCapture(); });
+            RouteButton("上移", 23, 552, 105, delegate { MovePosition(-1); });
+            RouteButton("下移", 138, 552, 105, delegate { MovePosition(1); });
+            RouteButton("删除", 253, 552, 118, delegate
             {
                 int index = SelectedPosition;
                 if (index < 0) return;
                 positions.RemoveAt(index);
                 RefreshPositions(Math.Min(index, positions.Count - 1));
             });
-            RouteButton("清空", 304, 498, 100, delegate
+            RouteButton("清空", 380, 552, 125, delegate
             {
                 if (positions.Count > 0 && ShowModal(delegate { return MessageBox.Show(this, "清空当前方案中的全部点位？", "清空点位", MessageBoxButtons.YesNo, MessageBoxIcon.Question); }) == DialogResult.Yes)
                 { positions.Clear(); RefreshPositions(-1); }
             });
 
-            start = ActionButton("开始连点   F6", 24, 586, 356, Green, Color.White);
-            stopButton = ActionButton("停止   F8", 394, 586, 182, Color.FromArgb(226, 233, 227), Ink);
+            start = ActionButton("开始连点   F6", 30, 733, 445, Green, Color.White);
+            stopButton = ActionButton("停止   F8", 493, 733, 228, Color.FromArgb(226, 233, 227), Ink);
             start.Click += delegate { Toggle(); };
             stopButton.Click += delegate { StopRun("已停止"); };
-            hint = AddLabel(this, "启动前倒数 3 秒 · 鼠标移至主屏左上角可紧急停止", 25, 649, 550, 45, 9, Muted, false);
+            hint = AddLabel(this, "启动前倒数 3 秒 · 鼠标移至主屏左上角可紧急停止", 31, 807, 688, 46, 9, Muted, false);
             InitializeAdvanced();
             LoadProfiles();
             timer.Interval = 80;
@@ -240,21 +264,21 @@ namespace MintClicker
 
         private static Label AddLabel(Control parent, string text, int x, int y, int w, int h, float size, Color color, bool bold)
         {
-            Label label = new Label { Text = text, Bounds = new Rectangle(x, y, w, h), Font = new Font("Microsoft YaHei UI", size, bold ? FontStyle.Bold : FontStyle.Regular), ForeColor = color, BackColor = Color.Transparent, AutoEllipsis = true };
+            Label label = new Label { Text = text, Bounds = new Rectangle(x, y, w, h), Font = UiFont(size, bold ? FontStyle.Bold : FontStyle.Regular), ForeColor = color, BackColor = Color.Transparent, AutoEllipsis = true };
             parent.Controls.Add(label);
             return label;
         }
 
         private NumericUpDown Number(Control parent, string name, int x, int y, int width, decimal min, decimal max, decimal value)
         {
-            NumericUpDown input = new NumericUpDown { AccessibleName = name, Bounds = new Rectangle(x, y, width, 32), Minimum = min, Maximum = max, Value = value, Font = new Font("Microsoft YaHei UI", 12), BorderStyle = BorderStyle.FixedSingle, ThousandsSeparator = true };
+            NumericUpDown input = new NumericUpDown { AccessibleName = name, Bounds = new Rectangle(x, y, width, 40), Minimum = min, Maximum = max, Value = value, Font = UiFont(12, FontStyle.Regular), BorderStyle = BorderStyle.FixedSingle, ThousandsSeparator = true };
             parent.Controls.Add(input);
             return input;
         }
 
         private ComboBox Choice(Control parent, string name, int x, int y, string[] values)
         {
-            ComboBox choice = new ComboBox { AccessibleName = name, Bounds = new Rectangle(x, y, 238, 32), DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(244, 247, 244), Font = new Font("Microsoft YaHei UI", 11) };
+            ComboBox choice = new ComboBox { AccessibleName = name, Bounds = new Rectangle(x, y, 298, 40), DropDownStyle = ComboBoxStyle.DropDownList, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(244, 247, 244), Font = UiFont(11, FontStyle.Regular) };
             choice.Items.AddRange(values);
             choice.SelectedIndex = 0;
             parent.Controls.Add(choice);
@@ -263,7 +287,7 @@ namespace MintClicker
 
         private Button ActionButton(string text, int x, int y, int width, Color back, Color fore)
         {
-            Button action = new Button { Text = text, Bounds = new Rectangle(x, y, width, 49), FlatStyle = FlatStyle.Flat, BackColor = back, ForeColor = fore, Cursor = Cursors.Hand, Font = new Font("Microsoft YaHei UI", 12, FontStyle.Bold), UseVisualStyleBackColor = false };
+            Button action = new Button { Text = text, Bounds = new Rectangle(x, y, width, 61), FlatStyle = FlatStyle.Flat, BackColor = back, ForeColor = fore, Cursor = Cursors.Hand, Font = UiFont(12, FontStyle.Bold), UseVisualStyleBackColor = false };
             action.FlatAppearance.BorderSize = 0;
             Controls.Add(action);
             return action;
@@ -276,7 +300,7 @@ namespace MintClicker
 
         private static Button SmallButton(Control parent, string text, int x, int y, int width, EventHandler handler)
         {
-            Button action = new Button { Text = text, Bounds = new Rectangle(x, y, width, 36), FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(237, 243, 238), Cursor = Cursors.Hand };
+            Button action = new Button { Text = text, Bounds = new Rectangle(x, y, width, 45), FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(237, 243, 238), Cursor = Cursors.Hand };
             action.FlatAppearance.BorderSize = 0;
             action.Click += handler;
             parent.Controls.Add(action);
@@ -865,15 +889,15 @@ namespace MintClicker
 
         private string AskProfileName(string title, string initial)
         {
-            using (Form dialog = new Form { Text = title, ClientSize = new Size(400, 146), Font = Font,
+            using (Form dialog = new Form { Text = title, ClientSize = new Size(500, 183), Font = UiFont(10, FontStyle.Regular),
                 StartPosition = FormStartPosition.CenterParent, FormBorderStyle = FormBorderStyle.FixedDialog,
                 MaximizeBox = false, MinimizeBox = false, ShowInTaskbar = false, AutoScaleMode = AutoScaleMode.Dpi })
             {
-                AddLabel(dialog, "方案名称（最多 60 个字符）", 18, 16, 360, 24, 10, Muted, false);
-                TextBox input = new TextBox { Text = initial, MaxLength = 60, Bounds = new Rectangle(18, 48, 364, 30) };
+                AddLabel(dialog, "方案名称（最多 60 个字符）", 23, 20, 450, 30, 10, Muted, false);
+                TextBox input = new TextBox { Text = initial, MaxLength = 60, Bounds = new Rectangle(23, 60, 455, 38) };
                 dialog.Controls.Add(input);
-                Button okay = SmallButton(dialog, "确定", 200, 96, 86, delegate { });
-                Button cancel = SmallButton(dialog, "取消", 296, 96, 86, delegate { });
+                Button okay = SmallButton(dialog, "确定", 250, 120, 108, delegate { });
+                Button cancel = SmallButton(dialog, "取消", 370, 120, 108, delegate { });
                 okay.DialogResult = DialogResult.OK;
                 cancel.DialogResult = DialogResult.Cancel;
                 dialog.AcceptButton = okay;

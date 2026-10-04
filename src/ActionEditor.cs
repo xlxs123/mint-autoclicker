@@ -41,28 +41,28 @@ namespace MintClicker
         internal ActionEditor(MacroEntry entry)
         {
             Text = "编辑宏步骤";
-            Font = new Font("Microsoft YaHei UI", 10);
+            Font = new Font("Microsoft YaHei UI", 12.5F);
             AutoScaleMode = AutoScaleMode.Dpi;
-            ClientSize = new Size(492, 548);
+            ClientSize = new Size(615, 675);
             StartPosition = FormStartPosition.CenterParent;
             FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = MinimizeBox = false; ShowInTaskbar = false;
-            LabelAt("动作类型", 20, 16, 180);
-            kind = ChoiceAt(20, 42, 260, new[] { "点击", "等待", "按键", "移动鼠标", "滚轮" }); kind.SelectedIndex = (int)entry.Kind;
-            enabled = new CheckBox { Text = "参与执行", Checked = entry.Enabled, Bounds = new Rectangle(300, 43, 168, 28) }; Controls.Add(enabled);
-            LabelAt("X 坐标", 20, 82, 216); LabelAt("Y 坐标", 256, 82, 216);
-            x = NumberAt(20, 108, -1000000, 1000000, entry.X); y = NumberAt(256, 108, -1000000, 1000000, entry.Y);
-            button = ChoiceAt(20, 151, 216, new[] { "左键", "右键", "中键" }); button.SelectedIndex = entry.Button;
-            twice = new CheckBox { Text = "每次执行双击", Checked = entry.DoubleClick, Bounds = new Rectangle(256, 151, 216, 28) }; Controls.Add(twice);
-            LabelAt("动作次数", 20, 192, 216); LabelAt("动作间隔（毫秒）", 256, 192, 216);
-            count = NumberAt(20, 218, 1, 10000, entry.Count); interval = NumberAt(256, 218, 0, 3600000, entry.RepeatInterval);
-            LabelAt("等待动作时长（毫秒）", 20, 262, 216); LabelAt("滚轮格数（正上 / 负下）", 256, 262, 216);
-            duration = NumberAt(20, 288, 0, 3600000, entry.Duration); wheel = NumberAt(256, 288, -100, 100, entry.Wheel);
-            LabelAt("按键：点击输入框后按下所需组合键", 20, 332, 452);
-            key = new KeyCaptureBox(entry) { Bounds = new Rectangle(20, 358, 452, 30) }; Controls.Add(key);
-            LabelAt("执行前等待（毫秒）", 20, 402, 216); LabelAt("执行后等待（毫秒）", 256, 402, 216);
-            before = NumberAt(20, 428, 0, 3600000, entry.DelayBefore); after = NumberAt(256, 428, 0, 3600000, entry.DelayAfter);
-            Button okay = new Button { Text = "确定", Bounds = new Rectangle(254, 494, 102, 36) };
-            Button cancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Bounds = new Rectangle(368, 494, 104, 36) };
+            LabelAt("动作类型", 25, 18, 225);
+            kind = ChoiceAt(25, 48, 325, new[] { "点击", "等待", "按键", "移动鼠标", "滚轮" }); kind.SelectedIndex = (int)entry.Kind;
+            enabled = new CheckBox { Text = "参与执行", Checked = entry.Enabled, Bounds = new Rectangle(375, 50, 210, 35) }; Controls.Add(enabled);
+            LabelAt("X 坐标", 25, 98, 270); LabelAt("Y 坐标", 320, 98, 270);
+            x = NumberAt(25, 128, -1000000, 1000000, entry.X); y = NumberAt(320, 128, -1000000, 1000000, entry.Y);
+            button = ChoiceAt(25, 182, 270, new[] { "左键", "右键", "中键" }); button.SelectedIndex = entry.Button;
+            twice = new CheckBox { Text = "每次执行双击", Checked = entry.DoubleClick, Bounds = new Rectangle(320, 182, 270, 35) }; Controls.Add(twice);
+            LabelAt("动作次数", 25, 233, 270); LabelAt("动作间隔（毫秒）", 320, 233, 270);
+            count = NumberAt(25, 263, 1, 10000, entry.Count); interval = NumberAt(320, 263, 0, 3600000, entry.RepeatInterval);
+            LabelAt("等待动作时长（毫秒）", 25, 319, 270); LabelAt("滚轮格数（正上 / 负下）", 320, 319, 270);
+            duration = NumberAt(25, 349, 0, 3600000, entry.Duration); wheel = NumberAt(320, 349, -100, 100, entry.Wheel);
+            LabelAt("按键：点击输入框后按下所需组合键", 25, 404, 565);
+            key = new KeyCaptureBox(entry) { Bounds = new Rectangle(25, 434, 565, 38) }; Controls.Add(key);
+            LabelAt("执行前等待（毫秒）", 25, 489, 270); LabelAt("执行后等待（毫秒）", 320, 489, 270);
+            before = NumberAt(25, 519, 0, 3600000, entry.DelayBefore); after = NumberAt(320, 519, 0, 3600000, entry.DelayAfter);
+            Button okay = new Button { Text = "确定", Bounds = new Rectangle(318, 598, 128, 45) };
+            Button cancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Bounds = new Rectangle(460, 598, 130, 45) };
             Controls.Add(okay); Controls.Add(cancel); AcceptButton = okay; CancelButton = cancel;
             okay.Click += delegate
             {
@@ -88,15 +88,15 @@ namespace MintClicker
             wheel.Enabled = value == ActionKind.Scroll;
         }
         private void LabelAt(string text, int x, int y, int width)
-        { Controls.Add(new Label { Text = text, Bounds = new Rectangle(x, y, width, 24) }); }
+        { Controls.Add(new Label { Text = text, Bounds = new Rectangle(x, y, width, 30) }); }
         private NumericUpDown NumberAt(int x, int y, decimal minimum, decimal maximum, decimal value)
         {
-            NumericUpDown control = new NumericUpDown { Bounds = new Rectangle(x, y, 216, 30), Minimum = minimum, Maximum = maximum, Value = value, ThousandsSeparator = true };
+            NumericUpDown control = new NumericUpDown { Bounds = new Rectangle(x, y, 270, 38), Minimum = minimum, Maximum = maximum, Value = value, ThousandsSeparator = true };
             Controls.Add(control); return control;
         }
         private ComboBox ChoiceAt(int x, int y, int width, string[] choices)
         {
-            ComboBox control = new ComboBox { Bounds = new Rectangle(x, y, width, 30), DropDownStyle = ComboBoxStyle.DropDownList };
+            ComboBox control = new ComboBox { Bounds = new Rectangle(x, y, width, 38), DropDownStyle = ComboBoxStyle.DropDownList };
             control.Items.AddRange(choices); control.SelectedIndex = 0; Controls.Add(control); return control;
         }
     }
