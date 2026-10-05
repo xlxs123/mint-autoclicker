@@ -54,7 +54,7 @@ namespace MintClicker
             pointsPage.BackColor = macroPage.BackColor = Color.White;
             Controls.Remove(positionsPanel);
             positionsPanel.Location = Point.Empty;
-            positionsPanel.Height = 640;
+            positionsPanel.Height = 636;
             pointsPage.Controls.Add(positionsPanel);
             editors.TabPages.Add(pointsPage);
             editors.TabPages.Add(macroPage);
@@ -62,7 +62,7 @@ namespace MintClicker
 
             // The macro tab is laid out as two columns: the step list with its type picker
             // on the left, the edit actions and loop settings on the right.
-            macroPanel = new Panel { Bounds = new Rectangle(0, 0, 533, 640), BackColor = Color.White };
+            macroPanel = new Panel { Bounds = new Rectangle(0, 0, 533, 636), BackColor = Color.White };
             macroPage.Controls.Add(macroPanel);
             AddLabel(macroPanel, "动作顺序", 23, 19, 475, 38, 13, Ink, true);
             AddLabel(macroPanel, "只执行勾选项 · 双击编辑 · F7 添加点击步骤", 23, 61, 488, 30, 9, Muted, false);
@@ -110,7 +110,7 @@ namespace MintClicker
             trayStop = new ToolStripMenuItem("停止（F8）", null, delegate { StopRun("已通过托盘停止"); });
             menu.Items.AddRange(new ToolStripItem[] { trayStart, trayPause, trayStop, new ToolStripSeparator(),
                 new ToolStripMenuItem("显示主窗口", null, delegate { RestoreWindow(); }), new ToolStripMenuItem("退出", null, delegate { RequestExit(); }) });
-            tray = new NotifyIcon { Icon = Icon, Text = "轻点 v2.0.2 · 已就绪", ContextMenuStrip = menu, Visible = true };
+            tray = new NotifyIcon { Icon = Icon, Text = "轻点 v2.0.3 · 已就绪", ContextMenuStrip = menu, Visible = true };
             tray.DoubleClick += delegate { RestoreWindow(); };
             Resize += delegate
             {
@@ -309,7 +309,7 @@ namespace MintClicker
                 trayPause.Enabled = engine.Running && !modalOpen;
                 trayPause.Text = engine.Paused ? "恢复（F9）" : "暂停（F9）";
                 trayStop.Enabled = engine.Running || pending || capturing || targetCapturing;
-                tray.Text = "轻点 v2.0.2 · " + (engine.Running ? engine.Paused ? "已暂停" : "运行中 · 第 " + current + " 项" : "已停止");
+                tray.Text = "轻点 v2.0.3 · " + (engine.Running ? engine.Paused ? "已暂停" : "运行中 · 第 " + current + " 项" : "已停止");
             }
         }
         private void RestoreWindow() { WindowState = FormWindowState.Normal; Show(); Activate(); }

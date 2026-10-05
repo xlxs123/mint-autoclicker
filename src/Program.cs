@@ -9,7 +9,7 @@ using System.Xml.Serialization;
 
 [assembly: System.Reflection.AssemblyTitle("轻点 · 连点器")]
 [assembly: System.Reflection.AssemblyProduct("轻点连点器")]
-[assembly: System.Reflection.AssemblyVersion("2.0.2.0")]
+[assembly: System.Reflection.AssemblyVersion("2.0.3.0")]
 
 namespace MintClicker
 {
@@ -82,6 +82,24 @@ namespace MintClicker
         private readonly Label status, count, elapsed, position, hint, rate;
         private readonly Button start, stopButton, editPoints, applyCoordinates;
         private readonly Panel settings, positionsPanel, profilePanel;
+        private Panel dashboardPanel;
+        private bool layoutReady, fullScreen, applyingScale;
+        private float currentScale = 1f;
+        // Scale the layout is heading for. A user resize recomputes it from the window; a
+        // mode change (full screen / back to design) sets it explicitly.
+        private float requestedScale = 1f;
+        private bool resizing;
+        private const int DesignWidth = 1325, DesignHeight = 873;
+        // Frame thickness of a Sizable window at this DPI (18 px per side, 39 px tall).
+        private const int WindowChromeWidth = 36, WindowChromeHeight = 39;
+        // Beyond this the text stops being readable; the window simply keeps its default
+        // size instead of zooming further.
+        private const float MaximumUiScale = 1.8f;
+        private Button fullScreenButton;
+        private Rectangle restoreBounds;
+        private bool restoreTopMost;
+        private string hintDefaultText = "";
+        private Color hintDefaultColor = Muted;
         private readonly ListView positionsList;
         private ImageList badgeImages;
         private List<Bitmap> badgeSources = new List<Bitmap>();
@@ -108,21 +126,22 @@ namespace MintClicker
             configPath = settingsPath;
             profilesPath = Path.ChangeExtension(settingsPath, ".profiles.v2.json");
             useHotkeys = registerHotkeys;
-            Text = "轻点 · 自动点击与宏 v2.0.2";
+            Text = "轻点 · 自动点击与宏 v2.0.3";
             AutoScaleDimensions = new SizeF(96, 96);
             AutoScaleMode = AutoScaleMode.Dpi;
             // 860 content + ~29 px of window chrome = 889, which fits the 912 px work area.
             // Never raise this without re-checking: exceeding the work area makes WinForms
             // clamp the window and add a scrollbar, which hides the bottom of the form.
-            ClientSize = new Size(1325, 880);
-            AutoScroll = true;
-            AutoScrollMinSize = ClientSize;
+            ClientSize = new Size(1325, 873);
+            // The design canvas. The window can be stretched or put in full screen; the
+            // layout stretches the two main columns and moves the bottom rows accordingly.
             BackColor = Color.FromArgb(244, 247, 244);
             ForeColor = Ink;
             Font = UiFont(10F, FontStyle.Regular);
             StartPosition = FormStartPosition.CenterScreen;
-            FormBorderStyle = FormBorderStyle.FixedSingle;
-            MaximizeBox = false;
+            FormBorderStyle = FormBorderStyle.Sizable;
+            MaximizeBox = true;
+            KeyPreview = true;
             DoubleBuffered = true;
             using (Icon icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath)) Icon = (Icon)icon.Clone();
 
@@ -131,10 +150,10 @@ namespace MintClicker
             pin = new CheckBox { Text = "窗口置顶", Bounds = new Rectangle(580, 46, 138, 38), AutoSize = false };
             pin.CheckedChanged += delegate { TopMost = pin.Checked; };
             Controls.Add(pin);
-            showMarkers = new CheckBox { Text = "显示屏幕标记", Checked = true, Bounds = new Rectangle(1075, 46, 195, 38) };
+            showMarkers = new CheckBox { Text = "显示屏幕标记", Checked = true, Bounds = new Rectangle(975, 46, 165, 38) };
             showMarkers.CheckedChanged += delegate { SyncMarkers(); };
             Controls.Add(showMarkers);
-            dragMarkers = new CheckBox { Text = "停止时允许拖动", Checked = true, Bounds = new Rectangle(1075, 85, 220, 30), Font = UiFont(9, FontStyle.Regular) };
+            dragMarkers = new CheckBox { Text = "停止时允许拖动", Checked = true, Bounds = new Rectangle(1022, 85, 190, 30), Font = UiFont(9, FontStyle.Regular) };
             dragMarkers.CheckedChanged += delegate { SetPointEditing(dragMarkers.Checked); };
             Controls.Add(dragMarkers);
 
@@ -152,6 +171,7 @@ namespace MintClicker
             SmallButton(profilePanel, "导出", 1032, 6, 98, delegate { ExportProfile(); });
 
             Panel dashboard = Card(30, 180, 690, 145, Color.FromArgb(227, 239, 231));
+            dashboardPanel = dashboard;
             status = AddLabel(dashboard, "●  已就绪", 23, 16, 638, 38, 13, Green, true);
             AddLabel(dashboard, "已执行轮数", 25, 66, 188, 25, 9, Muted, false);
             count = AddLabel(dashboard, "0", 25, 94, 294, 43, 20, Ink, true);
@@ -247,9 +267,16 @@ namespace MintClicker
             stopButton = ActionButton("停止   F8", 493, 733, 228, Color.FromArgb(226, 233, 227), Ink);
             start.Click += delegate { Toggle(); };
             stopButton.Click += delegate { StopRun("已停止"); };
+            // The window can be stretched or shown full screen; this button mirrors F11.
+            // The frame is 18 px per side after DPI scaling, so this stays inside the form.
+            fullScreenButton = SmallButton(this, "全屏   F11", 1145, 40, 160, delegate { ToggleFullScreen(); });
+            fullScreenButton.Font = UiFont(11, FontStyle.Regular);
             hint = AddLabel(this, "启动前倒数 3 秒 · 鼠标移至主屏左上角可紧急停止", 31, 807, 688, 46, 9, Muted, false);
             InitializeAdvanced();
+            hintDefaultText = hint.Text;
+            hintDefaultColor = hint.ForeColor;
             LoadProfiles();
+            CaptureBaseline();
             timer.Interval = 80;
             timer.Tick += delegate { Tick(); };
             timer.Start();
@@ -260,6 +287,163 @@ namespace MintClicker
             Panel card = new Panel { Bounds = new Rectangle(x, y, w, h), BackColor = color };
             Controls.Add(card);
             return card;
+        }
+
+        // ------------------------------------------------------------------
+        // Window stretching / full screen
+        // ------------------------------------------------------------------
+        // The layout is designed for 1325x880. Larger windows are handled by one simple
+        // transform, applied only to the containers that can absorb space without
+        // disturbing any control's position inside them:
+        //   * both main columns grow taller,
+        //   * the point/step lists inside the editors grow taller with them,
+        //   * the action row and the status lines move down to the new bottom edge.
+        // Everything else keeps its design position, so no control can collide or drift.
+
+        private void CaptureBaseline()
+        {
+            layoutReady = true;
+            // The zoom only grows, so this floor never fights it; it just keeps a user
+            // resize from clipping the design canvas.
+            MinimumSize = new Size(DesignWidth + WindowChromeWidth, DesignHeight + WindowChromeHeight);
+            Resize += OnFormResize;
+        }
+
+        // The layout is designed for 1325x873. A larger window zooms the whole interface
+        // proportionally: WinForms scales control bounds and fonts together, and scaling
+        // back restores the design geometry exactly. So nothing is left floating in empty
+        // space, and nothing can collide because nothing is repositioned independently.
+        private void ApplyWindowLayout()
+        {
+            if (!layoutReady || applyingScale) return;
+            // While a mode change (full screen or the return to the design size) is in
+            // progress the target is explicit; a user resize derives it from the window.
+            float target = resizing ? DesiredScale() : requestedScale;
+            if (Math.Abs(target - currentScale) < 0.01f) return;
+            applyingScale = true;
+            Resize -= OnFormResize;                 // our own resize must not re-enter
+            SuspendLayout();
+            try
+            {
+                Scale(new SizeF(target / currentScale, target / currentScale));
+                currentScale = target;
+                requestedScale = target;
+                // Scale() also changes the window size, so set the exact rect last. This
+                // resize is suppressed above, otherwise it would zoom again and run away.
+                Bounds = new Rectangle(Left, Top,
+                                       (int)Math.Round(DesignWidth * target) + WindowChromeWidth,
+                                       (int)Math.Round(DesignHeight * target) + WindowChromeHeight);
+            }
+            finally
+            {
+                ResumeLayout(true);
+                Resize += OnFormResize;
+                applyingScale = false;
+            }
+        }
+
+        // How far the interface zooms for this window. Taken from the window size the zoom
+        // itself would produce, so the result is a stable fixed point: applying it lands on
+        // exactly the size the next call measures, and the zoom cannot run away.
+        private float DesiredScale()
+        {
+            float fit = Math.Min(ClientSize.Width / (float)DesignWidth,
+                                 ClientSize.Height / (float)DesignHeight);
+            if (fit < 1f) return 1f;
+            return Math.Min(MaximumUiScale, fit);
+        }
+
+        // The largest zoom the current screen could ever need, used as the explicit target
+        // when the user asks for full screen.
+        private float FitScale()
+        {
+            Rectangle area = fullScreen ? Screen.FromControl(this).Bounds
+                                        : Screen.FromControl(this).WorkingArea;
+            float fitW = Math.Max(DesignWidth, area.Width - WindowChromeWidth) / (float)DesignWidth;
+            float fitH = Math.Max(DesignHeight, area.Height - WindowChromeHeight) / (float)DesignHeight;
+            if (fitW < 1f) fitW = 1f;
+            if (fitH < 1f) fitH = 1f;
+            return Math.Min(MaximumUiScale, Math.Min(fitW, fitH));
+        }
+
+        private void OnFormResize(object sender, EventArgs e)
+        {
+            if (WindowState == FormWindowState.Minimized) return;
+            // A genuine user resize: recompute the zoom from the window the user dragged.
+            resizing = true;
+            try { ApplyWindowLayout(); }
+            finally { resizing = false; }
+        }
+        private void ToggleFullScreen()
+        {
+            fullScreen = !fullScreen;
+            Resize -= OnFormResize;                 // both branches set the window rect
+            applyingScale = true;
+            SuspendLayout();
+            try
+            {
+                if (fullScreen)
+                {
+                    restoreBounds = Bounds;
+                    restoreTopMost = TopMost;
+                    // Undo any zoom while the window still has a border, so the frame
+                    // measurement below is the borderless one.
+                    if (Math.Abs(currentScale - 1f) >= 0.01f)
+                    {
+                        Scale(new SizeF(1f / currentScale, 1f / currentScale));
+                        currentScale = 1f;
+                    }
+                    FormBorderStyle = FormBorderStyle.None;
+                    TopMost = true;
+                    WindowState = FormWindowState.Normal;
+                    Bounds = Screen.FromControl(this).WorkingArea;
+                    // Explicit target: fill the screen. ApplyWindowLayout below applies it.
+                    requestedScale = FitScale();
+                }
+                else
+                {
+                    FormBorderStyle = FormBorderStyle.Sizable;
+                    // Undo the zoom now that the border is back; ApplyWindowLayout below
+                    // then sizes the window for the design canvas.
+                    if (Math.Abs(currentScale - 1f) >= 0.01f)
+                    {
+                        Scale(new SizeF(1f / currentScale, 1f / currentScale));
+                        currentScale = 1f;
+                    }
+                    TopMost = restoreTopMost;
+                    WindowState = FormWindowState.Normal;
+                    // Return to exactly the window the user had, and keep the zoom
+                    // consistent with that size so the next resize starts from the truth.
+                    Bounds = restoreBounds;
+                    requestedScale = Math.Min(MaximumUiScale,
+                        Math.Max(1f, Math.Min(restoreBounds.Width / (float)DesignWidth,
+                                               restoreBounds.Height / (float)DesignHeight)));
+                    if (Math.Abs(requestedScale - currentScale) < 0.01f) requestedScale = currentScale;
+                }
+            }
+            finally
+            {
+                ResumeLayout(true);
+                Resize += OnFormResize;
+                applyingScale = false;
+            }
+            if (fullScreenButton != null) fullScreenButton.Text = fullScreen ? "退出全屏" : "全屏   F11";
+            if (hint != null)
+            {
+                hint.Text = fullScreen ? "F11 或点击按钮退出全屏 · 鼠标移至主屏左上角可紧急停止" : hintDefaultText;
+                hint.ForeColor = hintDefaultColor;
+            }
+            ApplyWindowLayout();
+        }
+
+        protected override bool ProcessCmdKey(ref Message message, Keys keyData)
+        {
+            if (keyData == Keys.F11 && !modalOpen)
+            {
+                ToggleFullScreen();
+                return true;
+            }
+            return base.ProcessCmdKey(ref message, keyData);
         }
 
         private static Label AddLabel(Control parent, string text, int x, int y, int w, int h, float size, Color color, bool bold)
@@ -300,7 +484,7 @@ namespace MintClicker
 
         private static Button SmallButton(Control parent, string text, int x, int y, int width, EventHandler handler)
         {
-            Button action = new Button { Text = text, Bounds = new Rectangle(x, y, width, 45), FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(237, 243, 238), Cursor = Cursors.Hand };
+            Button action = new Button { Text = text, Bounds = new Rectangle(x, y, width, 42), FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(237, 243, 238), Cursor = Cursors.Hand };
             action.FlatAppearance.BorderSize = 0;
             action.Click += handler;
             parent.Controls.Add(action);
