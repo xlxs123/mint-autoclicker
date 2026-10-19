@@ -30,7 +30,7 @@ jobs:
             # Surface the output as annotations so the failing assertions are visible
             # without downloading the (auth-only) job log.
             $lines = @(Get-Content -LiteralPath $output -ErrorAction SilentlyContinue)
-            $picked = @($lines | Where-Object { $_ -match 'FAIL|error CS|Tests failed|失败' } | Select-Object -Last 25)
+            $picked = @($lines | Where-Object { $_ -match 'FAIL|error CS|Tests failed|失败|布局|环境' } | Select-Object -Last 40)
             if ($picked.Count -eq 0) { $picked = @($lines | Select-Object -Last 25) }
             $index = 0
             foreach ($line in $picked) {
