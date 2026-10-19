@@ -60,6 +60,12 @@ namespace MintClicker
             if (Array.IndexOf(new[] { 0, 1, 3, 5, 10 }, prefs.StartupDelay) < 0 || prefs.TargetTitle == null || prefs.TargetProcess == null ||
                 prefs.TargetTitle.Length > 1024 || prefs.TargetProcess.Length > 260)
                 throw new InvalidDataException("启动延时或目标窗口设置无效。");
+            if (prefs.JitterInterval < 0 || prefs.JitterInterval > 10000 || prefs.JitterPosition < 0 || prefs.JitterPosition > 500 ||
+                prefs.RunMinutes < 0 || prefs.RunMinutes > 10000)
+                throw new InvalidDataException("随机化或运行时长超出范围。");
+            if (prefs.ScheduleHour < -1 || prefs.ScheduleHour > 23 || prefs.ScheduleMinute < 0 || prefs.ScheduleMinute > 59)
+                throw new InvalidDataException("定时开始的时间无效。");
+            ValidateHotkeys(prefs);
             if (prefs.Actions == null || prefs.Actions.Count > MaxPoints) throw new InvalidDataException("宏步骤最多 1000 项。");
             foreach (MacroEntry entry in prefs.Actions) ActionCompiler.Validate(entry);
             if (prefs.LoopStart < 0 || prefs.LoopEnd < 0 || prefs.LoopStart > MaxPoints || prefs.LoopEnd > MaxPoints || prefs.LoopCount < 1 || prefs.LoopCount > 10000)
@@ -71,11 +77,31 @@ namespace MintClicker
                 if (point == null) throw new InvalidDataException("方案包含空点位。");
                 ValidateCoordinate(point.X, point.Y);
                 if (point.Button == -1) point.Button = prefs.Button;
+                if (point.Label == null) point.Label = "";
+                point.Label = point.Label.Trim();
+                if (point.Label.Length > 40) throw new InvalidDataException("点位备注最多 40 个字符。");
                 if (point.Button < 0 || point.Button > 2 || point.DelayBefore < 0 || point.DelayBefore > 3600000 ||
-                    point.DelayAfter < -1 || point.DelayAfter > 3600000 || point.Count < 1 || point.Count > 10000 || point.RepeatInterval < 0 || point.RepeatInterval > 3600000)
-                    throw new InvalidDataException("点位按键或延时超出范围。前延时为 0～3600000；后延时 -1 表示沿用全局间隔。");
+                    point.DelayAfter < -1 || point.DelayAfter > 3600000 || point.Count < 1 || point.Count > 10000 || point.RepeatInterval < 0 || point.RepeatInterval > 3600000 ||
+                    point.DoubleClick < -1 || point.DoubleClick > 1)
+                    throw new InvalidDataException("点位按键、延时或点击方式超出范围。前延时为 0～3600000；后延时 -1 表示沿用全局间隔。");
             }
         }
+        private static void ValidateHotkeys(Preferences prefs)
+        {
+            int[] values = { prefs.HotkeyStart, prefs.HotkeyCapture, prefs.HotkeyStop, prefs.HotkeyPause, prefs.HotkeyCapture2, prefs.HotkeyEmergency };
+            string[] names = { "开始/停止", "取点", "停止", "暂停", "备用取点", "紧急停止" };
+            HashSet<int> used = new HashSet<int>();
+            for (int i = 0; i < values.Length; i++)
+            {
+                int key = values[i] & 0xFFFF;
+                int mods = (values[i] >> 16) & 0xF;
+                if (key < 1 || key > 254 || (mods & ~0x7) != 0)
+                    throw new InvalidDataException("全局热键“" + names[i] + "”无效。");
+                if (!used.Add(values[i]))
+                    throw new InvalidDataException("全局热键“" + names[i] + "”与其它热键重复。");
+            }
+        }
+
         private static void ValidateCoordinate(int x, int y)
         {
             if (x < -1000000 || x > 1000000 || y < -1000000 || y > 1000000)

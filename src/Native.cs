@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.Text;
@@ -20,6 +21,56 @@ namespace MintClicker
         private struct WindowRect { internal int left, top, right, bottom; }
         [DllImport("user32.dll")]
         private static extern bool GetWindowRect(IntPtr handle, out WindowRect rect);
+        [DllImport("user32.dll")]
+        private static extern bool ClientToScreen(IntPtr handle, ref PointNative point);
+        [DllImport("user32.dll")]
+        private static extern bool GetClientRect(IntPtr handle, out WindowRect rect);
+
+        // Screen position of the client area's top-left corner. Used when coordinates
+        // are stored relative to the bound target window.
+        internal static bool ClientOrigin(IntPtr window, out Point origin)
+        {
+            origin = Point.Empty;
+            if (window == IntPtr.Zero || !IsWindow(window)) return false;
+            PointNative point = new PointNative();
+            if (!ClientToScreen(window, ref point)) return false;
+            origin = new Point(point.x, point.y);
+            return true;
+        }
+
+        // Client rectangle of a window in screen coordinates, used as the search area
+        // for the "find image" step.
+        internal static bool ClientArea(IntPtr window, out Rectangle area)
+        {
+            area = Rectangle.Empty;
+            if (window == IntPtr.Zero || !IsWindow(window)) return false;
+            WindowRect client;
+            if (!GetClientRect(window, out client)) return false;
+            Point origin;
+            if (!ClientOrigin(window, out origin)) return false;
+            area = new Rectangle(origin.X, origin.Y, client.right - client.left, client.bottom - client.top);
+            return area.Width > 0 && area.Height > 0;
+        }
+
+        // ARGB pixels of a screen region, for template matching.
+        internal static int[] CaptureScreen(Rectangle area)
+        {
+            if (area.Width <= 0 || area.Height <= 0 || area.Width > 4000 || area.Height > 4000)
+                throw new ArgumentException("截图区域无效。");
+            using (Bitmap bitmap = new Bitmap(area.Width, area.Height, PixelFormat.Format32bppArgb))
+            {
+                using (Graphics graphics = Graphics.FromImage(bitmap))
+                    graphics.CopyFromScreen(area.Left, area.Top, 0, 0, new Size(area.Width, area.Height), CopyPixelOperation.SourceCopy);
+                BitmapData data = bitmap.LockBits(new Rectangle(0, 0, area.Width, area.Height), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+                try
+                {
+                    int[] pixels = new int[area.Width * area.Height];
+                    Marshal.Copy(data.Scan0, pixels, 0, pixels.Length);
+                    return pixels;
+                }
+                finally { bitmap.UnlockBits(data); }
+            }
+        }
         [DllImport("user32.dll")]
         private static extern bool IsWindowVisible(IntPtr handle);
         [DllImport("user32.dll")]
@@ -66,6 +117,78 @@ namespace MintClicker
         internal static extern bool IsWindow(IntPtr window);
         [DllImport("user32.dll")]
         internal static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetWindow(IntPtr window, uint command);
+        [DllImport("winmm.dll")]
+        private static extern uint timeBeginPeriod(uint period);
+        [DllImport("winmm.dll")]
+        private static extern uint timeEndPeriod(uint period);
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetDC(IntPtr window);
+        [DllImport("user32.dll")]
+        private static extern int ReleaseDC(IntPtr window, IntPtr dc);
+        [DllImport("gdi32.dll")]
+        private static extern uint GetPixel(IntPtr dc, int x, int y);
+
+        // One screen pixel, for the "wait for colour" macro step.
+        internal static Color Pixel(Point point)
+        {
+            IntPtr dc = GetDC(IntPtr.Zero);
+            if (dc == IntPtr.Zero) throw new InvalidOperationException("无法读取屏幕颜色。");
+            try
+            {
+                uint value = GetPixel(dc, point.X, point.Y);
+                if (value == 0xFFFFFFFFu) throw new InvalidOperationException("无法读取该点的屏幕颜色。");
+                return Color.FromArgb((int)(value & 0xFF), (int)((value >> 8) & 0xFF), (int)((value >> 16) & 0xFF));
+            }
+            finally { ReleaseDC(IntPtr.Zero, dc); }
+        }
+
+        // Windows schedules sleeps at ~15.6 ms unless a process asks for a finer timer.
+        // Raised only while a run is active, then released again.
+        internal static void BeginPrecision() { timeBeginPeriod(1); }
+        internal static void EndPrecision() { timeEndPeriod(1); }
+
+        // Visible, unowned top-level windows of other processes: the pick list for the
+        // target-window binding.
+        internal static List<IntPtr> TaskWindows()
+        {
+            List<IntPtr> result = new List<IntPtr>();
+            int own = Process.GetCurrentProcess().Id;
+            EnumWindows(delegate(IntPtr window, IntPtr state)
+            {
+                if (!IsWindowVisible(window)) return true;
+                if (GetWindow(window, 4) != IntPtr.Zero) return true;   // GW_OWNER: dialogs
+                if (WindowTitle(window).Length == 0) return true;
+                uint process;
+                GetWindowThreadProcessId(window, out process);
+                if ((int)process == own) return true;
+                result.Add(window);
+                return true;
+            }, IntPtr.Zero);
+            return result;
+        }
+
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+        private static extern uint RegisterWindowMessage(string message);
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+
+        // A system-wide message every running copy listens for. Broadcasting it makes
+        // an existing instance restore itself instead of showing "already running".
+        private static readonly uint activateMessage = RegisterWindowMessage("MintClicker.Activate.Window.v1");
+        internal static uint ActivateMessage { get { return activateMessage; } }
+
+        internal static void RequestActivate()
+        {
+            if (activateMessage == 0) return;
+            for (int attempt = 0; attempt < 4; attempt++)
+            {
+                PostMessage(new IntPtr(0xFFFF), activateMessage, IntPtr.Zero, IntPtr.Zero);
+                System.Threading.Thread.Sleep(150);
+            }
+        }
+
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern int GetWindowText(IntPtr window, StringBuilder text, int capacity);
         private delegate bool EnumWindowProc(IntPtr window, IntPtr state);
@@ -173,6 +296,33 @@ namespace MintClicker
             {
                 SendInput((uint)releases.Count, releases.ToArray(), Marshal.SizeOf(typeof(Input)));
                 throw new InvalidOperationException("键盘输入未完整发送，已尝试释放按键。请检查权限。");
+            }
+        }
+
+        // Press, interpolate the move over the requested time, release. The button is
+        // always released, even if a move fails part way.
+        internal static void Drag(int button, Point from, Point to, int milliseconds, Rectangle desktop)
+        {
+            uint down = button == 1 ? 0x0008u : button == 2 ? 0x0020u : 0x0002u;
+            uint up = button == 1 ? 0x0010u : button == 2 ? 0x0040u : 0x0004u;
+            int size = Marshal.SizeOf(typeof(Input));
+            bool pressed = false;
+            try
+            {
+                SendChecked(new[] { AbsoluteMove(from, desktop) });
+                SendChecked(new[] { Mouse(down, 0, 0) });
+                pressed = true;
+                int steps = Math.Max(1, Math.Min(200, Math.Max(1, milliseconds) / 15));
+                for (int i = 1; i <= steps; i++)
+                {
+                    Point at = new Point(from.X + (to.X - from.X) * i / steps, from.Y + (to.Y - from.Y) * i / steps);
+                    SendChecked(new[] { AbsoluteMove(at, desktop) });
+                    System.Threading.Thread.Sleep(Math.Max(1, milliseconds / steps));
+                }
+            }
+            finally
+            {
+                if (pressed) SendInput(1, new[] { Mouse(up, 0, 0) }, size);
             }
         }
 

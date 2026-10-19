@@ -1,6 +1,7 @@
 param(
     [string]$OutputName = 'AutoClicker.exe',
-    [switch]$IncludeTestTools
+    [switch]$IncludeTestTools,
+    [switch]$RunTests
 )
 $ErrorActionPreference = 'Stop'
 if ([System.IO.Path]::GetFileName($OutputName) -ne $OutputName -or -not $OutputName.EndsWith('.exe')) { throw 'OutputName must be an .exe filename.' }
@@ -30,13 +31,31 @@ $writer.Write($png)
 $writer.Dispose(); $stream.Dispose(); $white.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
 $exe = Join-Path $dist $OutputName
 $sources = @(Get-ChildItem -LiteralPath (Join-Path $root 'src') -Filter '*.cs' | ForEach-Object { $_.FullName })
-& $compiler /nologo /target:winexe /platform:anycpu /optimize+ /warn:4 /warnaserror+ /codepage:65001 "/out:$exe" "/win32icon:$iconPath" "/win32manifest:$(Join-Path $root 'app.manifest')" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Xml.dll /reference:System.Web.Extensions.dll $sources
+$references = @(
+    '/reference:System.Windows.Forms.dll',
+    '/reference:System.Drawing.dll',
+    '/reference:System.Xml.dll',
+    '/reference:System.Web.Extensions.dll',
+    '/reference:System.IO.Compression.dll',
+    '/reference:System.IO.Compression.FileSystem.dll'
+)
+& $compiler /nologo /target:winexe /platform:anycpu /optimize+ /warn:4 /warnaserror+ /codepage:65001 "/out:$exe" "/win32icon:$iconPath" "/win32manifest:$(Join-Path $root 'app.manifest')" $references $sources
 if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
 Write-Output "Built: $exe"
 $testSource = Join-Path $root 'tests\TestPad.cs'
 if ($IncludeTestTools -and (Test-Path -LiteralPath $testSource)) {
     $testExe = Join-Path $root 'tests\TestPad.exe'
-    & $compiler /nologo /target:winexe /main:MintClicker.TestPad /platform:anycpu /optimize+ /warn:4 /warnaserror+ /codepage:65001 "/out:$testExe" "/win32manifest:$(Join-Path $root 'app.manifest')" /reference:System.Windows.Forms.dll /reference:System.Drawing.dll /reference:System.Xml.dll /reference:System.Web.Extensions.dll $sources $testSource
+    & $compiler /nologo /target:winexe /main:MintClicker.TestPad /platform:anycpu /optimize+ /warn:4 /warnaserror+ /codepage:65001 "/out:$testExe" "/win32manifest:$(Join-Path $root 'app.manifest')" $references $sources $testSource
     if ($LASTEXITCODE -ne 0) { throw 'Test build failed.' }
     Write-Output "Built test pad: $testExe"
+}
+if ($RunTests) {
+    $engineTests = Join-Path $root 'tests\EngineTests.cs'
+    if (-not (Test-Path -LiteralPath $engineTests)) { throw 'tests\EngineTests.cs was not found.' }
+    $testExe = Join-Path $root 'tests\EngineTests.exe'
+    & $compiler /nologo /target:exe /main:MintClicker.EngineTests /platform:anycpu /optimize+ /warn:4 /warnaserror+ /codepage:65001 "/out:$testExe" "/win32icon:$iconPath" "/win32manifest:$(Join-Path $root 'app.manifest')" $references $sources $engineTests
+    if ($LASTEXITCODE -ne 0) { throw 'Test build failed.' }
+    & $testExe
+    if ($LASTEXITCODE -ne 0) { throw "Tests failed (exit code $LASTEXITCODE)." }
+    Write-Output 'Tests passed.'
 }

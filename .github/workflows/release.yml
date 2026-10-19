@@ -1,0 +1,39 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Engine tests
+        shell: pwsh
+        run: ./build.ps1 -OutputName AutoClicker-test.exe -RunTests
+
+      - name: Build release assets
+        shell: pwsh
+        run: ./release.ps1
+
+      - name: Create or update the GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $folder = Join-Path '.release' $tag
+          if (-not (Test-Path -LiteralPath $folder)) { throw "No assets at $folder" }
+          $assets = @(Get-ChildItem -LiteralPath $folder -File | ForEach-Object { $_.FullName })
+          gh release view $tag 2>$null | Out-Null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @assets --clobber
+          } else {
+            gh release create $tag @assets --title "轻点 $tag" --notes-file RELEASE_NOTES.md
+          }
