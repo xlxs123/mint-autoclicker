@@ -16,7 +16,31 @@ jobs:
 
       - name: Engine tests
         shell: pwsh
-        run: ./build.ps1 -OutputName AutoClicker-test.exe -RunTests
+        run: |
+          $output = Join-Path $env:RUNNER_TEMP 'engine-tests.log'
+          $exit = 0
+          try {
+            ./build.ps1 -OutputName AutoClicker-test.exe -RunTests *>&1 | Tee-Object -FilePath $output
+            $exit = $LASTEXITCODE
+          } catch {
+            $exit = 1
+            ($_ | Out-String) | Tee-Object -FilePath $output -Append
+          }
+          if ($exit -ne 0) {
+            # Surface the output as annotations so the failing assertions are visible
+            # without downloading the (auth-only) job log.
+            $lines = @(Get-Content -LiteralPath $output -ErrorAction SilentlyContinue)
+            $picked = @($lines | Where-Object { $_ -match 'FAIL|error CS|Tests failed|失败' } | Select-Object -Last 25)
+            if ($picked.Count -eq 0) { $picked = @($lines | Select-Object -Last 25) }
+            $index = 0
+            foreach ($line in $picked) {
+              $index++
+              $text = ($line -replace '%', '%25' -replace "`r", '' -replace "`n", ' ')
+              if ($text.Length -gt 800) { $text = $text.Substring(0, 800) }
+              Write-Output "::error title=test output $index::$text"
+            }
+            exit 1
+          }
 
       - name: Build release assets
         shell: pwsh
