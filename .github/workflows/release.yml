@@ -27,11 +27,14 @@ jobs:
             ($_ | Out-String) | Tee-Object -FilePath $output -Append
           }
           if ($exit -ne 0) {
-            # Surface the output as annotations so the failing assertions are visible
-            # without downloading the (auth-only) job log.
+            # Surface the most useful lines as annotations: GitHub shows at most 10
+            # per step, so put the summary and environment first.
             $lines = @(Get-Content -LiteralPath $output -ErrorAction SilentlyContinue)
-            $picked = @($lines | Where-Object { $_ -match 'FAIL|error CS|Tests failed|失败|布局|环境' } | Select-Object -Last 40)
-            if ($picked.Count -eq 0) { $picked = @($lines | Select-Object -Last 25) }
+            $picked = @()
+            $picked += @($lines | Where-Object { $_ -match 'FAIL .*有 \d+ 处布局问题' } | Select-Object -Last 1)
+            $picked += @($lines | Where-Object { $_ -match '环境:' } | Select-Object -Last 1)
+            $picked += @($lines | Where-Object { $_ -match '布局:' } | Select-Object -Last 7)
+            $picked += @($lines | Where-Object { $_ -match 'FAIL' } | Select-Object -Last 1)
             $index = 0
             foreach ($line in $picked) {
               $index++
