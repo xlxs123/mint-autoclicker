@@ -645,6 +645,9 @@ namespace MintClicker
                     form.Show();
                 }
                 form.CreateControl();
+                using (Graphics graphics = Graphics.FromHwnd(IntPtr.Zero))
+                    Console.WriteLine("    环境: DPI=" + graphics.DpiX + " 主屏=" + Screen.PrimaryScreen.Bounds +
+                        " 工作区=" + Screen.PrimaryScreen.WorkingArea + " 字体=" + form.Font.FontFamily.Name + " " + form.Font.SizeInPoints.ToString("0.#") + "pt");
                 AuditContainer(form, issues);
             }
             finally
@@ -652,7 +655,7 @@ namespace MintClicker
                 if (!wasVisible) form.Hide();
             }
             foreach (string issue in issues) Console.WriteLine("    布局: " + issue);
-            Assert(issues.Count == 0, form.Text + " 有 " + issues.Count + " 处布局问题");
+            Assert(issues.Count == 0, form.Text + " ClientSize=" + form.ClientSize + " MinimumSize=" + form.MinimumSize + " 有 " + issues.Count + " 处布局问题");
         }
 
         private static void AuditContainer(Control parent, List<string> issues)
