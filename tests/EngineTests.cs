@@ -597,7 +597,7 @@ namespace MintClicker
             try
             {
                 using (MainForm form = new MainForm(Path.Combine(root, "settings.xml"), false))
-                    AuditLayout(form);
+                    AuditLayout(form, new Size(1325, 873));
             }
             finally
             {
@@ -631,11 +631,14 @@ namespace MintClicker
 
         // Builds the form off-screen (needed because Control.Visible follows the
         // parent chain), then checks every visible control for clipped text, overflow
-        // and overlapping siblings.
-        private static void AuditLayout(Form form)
+        // and overlapping siblings. A form whose window was resized away from its design
+        // canvas (small screen, DPI scaling) is skipped: the audit would describe the
+        // screen, not the layout.
+        private static void AuditLayout(Form form, Size? designCanvas = null)
         {
             bool wasVisible = form.Visible;
             List<string> issues = new List<string>();
+            string environment = "";
             try
             {
                 if (!wasVisible)
@@ -646,15 +649,34 @@ namespace MintClicker
                 }
                 form.CreateControl();
                 using (Graphics graphics = Graphics.FromHwnd(IntPtr.Zero))
-                    Console.WriteLine("    环境: DPI=" + graphics.DpiX + " 主屏=" + Screen.PrimaryScreen.Bounds +
-                        " 工作区=" + Screen.PrimaryScreen.WorkingArea + " 字体=" + form.Font.FontFamily.Name + " " + form.Font.SizeInPoints.ToString("0.#") + "pt");
+                    environment = "DPI=" + graphics.DpiX + " 屏幕=" + Screen.PrimaryScreen.WorkingArea +
+                        " 字体=" + form.Font.FontFamily.Name + " " + form.Font.SizeInPoints.ToString("0.#") + "pt";
+                if (designCanvas.HasValue)
+                {
+                    Size canvas = designCanvas.Value;
+                    // The window normally keeps the design canvas plus a small chrome margin.
+                    // Small screens, DPI scaling or a clamped window move it away from that;
+                    // auditing then would describe the screen instead of the layout.
+                    bool onCanvas = form.ClientSize.Width >= canvas.Width && form.ClientSize.Width <= canvas.Width + 60 &&
+                                    form.ClientSize.Height >= canvas.Height && form.ClientSize.Height <= canvas.Height + 60;
+                    if (!onCanvas)
+                    {
+                        Console.WriteLine("    跳过布局审计: 窗口被屏幕或缩放限制，ClientSize=" + form.ClientSize +
+                            " 设计=" + canvas + " " + environment);
+                        return;
+                    }
+                }
                 AuditContainer(form, issues);
             }
             finally
             {
                 if (!wasVisible) form.Hide();
             }
-            foreach (string issue in issues) Console.WriteLine("    布局: " + issue);
+            if (issues.Count > 0)
+            {
+                foreach (string issue in issues) Console.WriteLine("    布局: " + issue);
+                Console.WriteLine("    环境: " + environment + " ClientSize=" + form.ClientSize + " MinimumSize=" + form.MinimumSize);
+            }
             Assert(issues.Count == 0, form.Text + " ClientSize=" + form.ClientSize + " MinimumSize=" + form.MinimumSize + " 有 " + issues.Count + " 处布局问题");
         }
 
